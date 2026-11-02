@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>An Imagined Sky</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: #24465d;
+      background: #b7d8e9;
+      font-family: Arial, sans-serif;
+    }
+
+    /* 整片天空 */
+    #sky {
+      position: relative;
+      min-height: 700px;
+      height: 100svh;
+      overflow: hidden;
+      isolation: isolate;
+
+      background: linear-gradient(
+        to bottom,
+        #79aed0 0%,
+        #b2d4e4 55%,
+        #dfebed 100%
+      );
+    }
+
+    /* 可以点击的照片层 */
+    .fragment {
+      position: absolute;
+      display: block;
+      padding: 0;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+
+      /* 保留照片本身的明暗和纹理 */
+      mix-blend-mode: normal;
+
+      /* 柔化边缘，让照片互相融合 */
+      -webkit-mask-image: radial-gradient(
+        ellipse closest-side,
+        black 25%,
+        rgba(0, 0, 0, 0.8) 55%,
+        transparent 100%
+      );
+
+      mask-image: radial-gradient(
+        ellipse closest-side,
+        black 25%,
+        rgba(0, 0, 0, 0.8) 55%,
+        transparent 100%
+      );
+    }
+
+    .fragment img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+
+      /* 提高建筑纹理的对比度 */
+      filter: saturate(0.7) contrast(1.15);
+      transition: filter 0.3s;
+    }
+
+    .fragment:hover img,
+    .fragment:focus-visible img {
+      filter: saturate(0.9) contrast(1.25);
+    }
+
+    .fragment:focus-visible {
+      outline: 3px solid white;
+      outline-offset: -8px;
+    }
+
+    
+    .sky-wash {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+
+      background: linear-gradient(
+        to bottom,
+        rgba(92, 164, 207, 0.22),
+        rgba(209, 231, 239, 0.16)
+      );
+    }
+
+    header {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      right: 24px;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: Georgia, serif;
+      font-size: clamp(28px, 4vw, 52px);
+      font-weight: normal;
+      text-shadow: 0 1px 8px rgba(230, 242, 248, 0.8);
+    }
+
+    header p {
+      margin: 10px 0 16px;
+      font-size: 13px;
+      text-shadow: 0 1px 6px rgba(230, 242, 248, 0.9);
+    }
+
+    #rearrange {
+      pointer-events: auto;
+      border: 1px solid rgba(36, 70, 93, 0.4);
+      padding: 9px 14px;
+      border-radius: 20px;
+      background: rgba(230, 242, 248, 0.8);
+      color: inherit;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    #rearrange:hover {
+      background: #e6f2f8;
+    }
+
+    #status {
+      position: absolute;
+      left: 24px;
+      bottom: 18px;
+      z-index: 3;
+      max-width: calc(100% - 48px);
+      font-size: 12px;
+      pointer-events: none;
+    }
+
+    /* 原图展示窗口 */
+    dialog {
+      max-width: 94vw;
+      max-height: 94vh;
+      margin: auto;
+      padding: 18px;
+      border: none;
+      background: #e4eff4;
+      color: #24465d;
+    }
+
+    dialog::backdrop {
+      background: rgba(17, 36, 49, 0.86);
+    }
+
+    .viewer-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+
+    .viewer-bar form {
+      margin: 0;
+    }
+
+    .close-button {
+      border: none;
+      padding: 8px 0;
+      background: transparent;
+      color: inherit;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    #fullPhoto {
+      display: block;
+      max-width: 85vw;
+      max-height: 75vh;
+      width: auto;
+      height: auto;
+      margin: auto;
+      object-fit: contain;
+    }
+
+    @media (max-width: 600px) {
+      #sky {
+        min-height: 600px;
+      }
+
+      header {
+        top: 20px;
+        left: 18px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .fragment img {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <main id="sky">
+
+    <header>
+      <h1>An Imagined Sky</h1>
+      <p>Click a trace to find the place behind it.</p>
+      <button id="rearrange">↻ Imagine another sky</button>
+    </header>
+
+    <div class="sky-wash"></div>
+
+    <p id="status" role="status">
+      Loading photographs…
+    </p>
+
+  </main>
+
+  <dialog id="photoViewer" aria-label="Original photograph">
+
+    <div class="viewer-bar">
+      <form method="dialog">
+        <button class="close-button">← Back to the sky</button>
+      </form>
+
+      <span id="photoLabel"></span>
+    </div>
+
+    <img id="fullPhoto" alt="">
+
+  </dialog>
+
+  <script>
+    const sky = document.querySelector("#sky");
+    const viewer = document.querySelector("#photoViewer");
+    const fullPhoto = document.querySelector("#fullPhoto");
+    const photoLabel = document.querySelector("#photoLabel");
+    const rearrange = document.querySelector("#rearrange");
+    const status = document.querySelector("#status");
+
+    const photographs = [];
+
+    function randomBetween(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+   
+    async function loadPhotographs() {
+      const results = await Promise.all(
+        Array.from({ length: 10 }, function (_, index) {
+          const number = index + 1;
+          const path = "images/" + number + ".jpg";
+
+          return new Promise(function (resolve) {
+            const image = new Image();
+
+            image.onload = function () {
+              resolve({ number, path });
+            };
+
+            image.onerror = function () {
+              resolve(null);
+            };
+
+            image.src = path;
+          });
+        })
+      );
+
+      results.forEach(function (photo) {
+        if (photo) {
+          photographs.push(photo);
+        }
+      });
+
+      if (photographs.length === 0) {
+        status.textContent =
+          "No photographs loaded. Check the images folder.";
+        return;
+      }
+
+      createSky();
+    }
+
+    // 生成新的天空构图
+    function createSky() {
+      if (photographs.length === 0) return;
+
+      sky.querySelectorAll(".fragment").forEach(function (item) {
+        item.remove();
+      });
+
+      const columns = 5;
+      const rows = 4;
+      const count = columns * rows;
+
+     
+      const arrangement = [];
+
+      for (let i = 0; i < count; i++) {
+        arrangement.push(
+          photographs[i % photographs.length]
+        );
+      }
+
+      for (let i = arrangement.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+
+        [arrangement[i], arrangement[j]] =
+          [arrangement[j], arrangement[i]];
+      }
+
+      arrangement.forEach(function (photo, index) {
+        const fragment = document.createElement("button");
+
+        fragment.type = "button";
+        fragment.className = "fragment";
+
+        fragment.setAttribute(
+          "aria-label",
+          "View original photograph " + photo.number
+        );
+
+        const image = document.createElement("img");
+
+        image.src = photo.path;
+        image.alt = "";
+        image.draggable = false;
+
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+
+    
+        const width = randomBetween(44, 60);
+        const height = randomBetween(48, 68);
+
+        const centerX =
+          (column + 0.5) * (100 / columns) +
+          randomBetween(-7, 7);
+
+        const centerY =
+          (row + 0.5) * (100 / rows) +
+          randomBetween(-7, 7);
+
+        fragment.style.width = width + "%";
+        fragment.style.height = height + "%";
+
+        fragment.style.left =
+          centerX - width / 2 + "%";
+
+        fragment.style.top =
+          centerY - height / 2 + "%";
+
+        fragment.style.transform =
+          "rotate(" + randomBetween(-24, 24) + "deg)";
+
+      
+        fragment.style.opacity =
+          randomBetween(0.20, 0.30);
+
+        image.style.objectPosition =
+          randomBetween(20, 80) + "% " +
+          randomBetween(20, 80) + "%";
+
+        fragment.appendChild(image);
+        sky.appendChild(fragment);
+
+      
+        fragment.addEventListener("click", function () {
+          fullPhoto.src = photo.path;
+
+          fullPhoto.alt =
+            "Original photograph " + photo.number;
+
+          photoLabel.textContent =
+            "Photograph " + photo.number;
+
+          viewer.showModal();
+        });
+      });
+
+      const failed = 10 - photographs.length;
+
+      status.textContent = failed > 0
+        ? photographs.length + " photographs loaded · " +
+          failed + " unavailable"
+        : "";
+    }
+
+    rearrange.addEventListener("click", createSky);
+
+    viewer.addEventListener("close", function () {
+      fullPhoto.removeAttribute("src");
+      fullPhoto.alt = "";
+    });
+
+    loadPhotographs();
+  </script>
+
+</body>
+</html>
